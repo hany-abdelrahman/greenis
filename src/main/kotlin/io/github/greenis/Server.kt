@@ -23,6 +23,7 @@ import java.io.IOException
 import java.util.logging.Level
 import java.util.logging.Logger
 import com.google.protobuf.ByteString
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Server that manages startup/shutdown of a `Greeter` server.
@@ -65,7 +66,7 @@ class GreenisServer {
     }
 
     internal class GreenisServerImpl : GreenisServerGrpc.GreenisServerImplBase() {
-        private val cache = HashMap<String, ByteString>()
+        private val cache = ConcurrentHashMap<String, ByteString>()
         override fun put(request: PutRequest, responseObserver: StreamObserver<PutResponse>?) {
             logger.info("Received put request: $request")
             cache[request.key] = request.value
@@ -81,18 +82,15 @@ class GreenisServer {
 
         override fun get(request: GetRequest, responseObserver: StreamObserver<GetResponse>?) {
             logger.info("Received get request $request")
-            val key = request.key
-            if (cache.containsKey(key)) {
-                val value = cache[key]
-                val response = GetResponse.newBuilder().setStatus(Status.OK).setValue(value).build()
-                responseObserver?.onNext(response)
-                responseObserver?.onCompleted()
+            val value = cache[request.key]
+            val status = if (value != null) Status.OK else Status.NOT_EXISTS
+            val responseBuilder = GetResponse.newBuilder().setStatus(status)
+            if (status == Status.OK) {
+                responseBuilder.value = value
             }
-            else {
-                val response = GetResponse.newBuilder().setStatus(Status.NOT_EXISTS).build()
-                responseObserver?.onNext(response)
-                responseObserver?.onCompleted()
-            }
+
+            responseObserver?.onNext(responseBuilder.build())
+            responseObserver?.onCompleted()
         }
 
         override fun contains(request: ContainsRequest, responseObserver: StreamObserver<ContainsResponse>?) {
@@ -107,17 +105,10 @@ class GreenisServer {
         override fun delete(request: DeleteRequest, responseObserver: StreamObserver<DeleteResponse>?) {
             logger.info("Received delete request $request")
             val key = request.key
-            if (cache.containsKey(key)) {
-                cache.remove(key)
-                val response = DeleteResponse.newBuilder().setStatus(Status.OK).build()
-                responseObserver?.onNext(response)
-                responseObserver?.onCompleted()
-            }
-            else {
-                val response = DeleteResponse.newBuilder().setStatus(Status.NOT_EXISTS).build()
-                responseObserver?.onNext(response)
-                responseObserver?.onCompleted()
-            }
+            val status = if (cache.remove(key) != null) Status.OK else Status.NOT_EXISTS
+            val response = DeleteResponse.newBuilder().setStatus(status).build()
+            responseObserver?.onNext(response)
+            responseObserver?.onCompleted()
         }
     }
 

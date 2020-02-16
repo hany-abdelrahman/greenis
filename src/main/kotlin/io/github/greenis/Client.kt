@@ -75,7 +75,7 @@ internal constructor(private val channel: ManagedChannel) {
                 logger.log(Level.WARNING, "RPC failed: {0}", e.status)
                 return
             }
-            logger.info("Greenis server responded with: ${response.value.toStringUtf8()}")
+            logger.info("Greenis server responded with: ${response}")
         }
     }
 
